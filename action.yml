@@ -192,7 +192,11 @@ runs:
       run: |
         set -euo pipefail
 
-        BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+        if [ -z "${BRANCH_NAME:-}" ]; then
+          echo "Error: BRANCH_NAME is empty."
+          exit 1
+        fi
+        
         TAG_NAME="lokalise-sync-${BRANCH_NAME}"
         echo "Looking for tag: $TAG_NAME"
 
