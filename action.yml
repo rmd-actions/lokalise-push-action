@@ -352,7 +352,7 @@ runs:
         SKIP_DEFAULT_FLAGS: "${{ inputs.skip_default_flags }}"
         PLATFORM: "${{ steps.detect-platform.outputs.platform }}"
         # File lists are attacker-influenceable (translation file names). Pass them
-        # through env so bash treats them as data, never as inline script. See YWH-41.
+        # through env so bash treats them as data, never as inline script.
         ALL_FILES: "${{ steps.find-files.outputs.ALL_FILES }}"
         CHANGED_FILES: "${{ steps.changed-files.outputs.all_changed_files }}"
       run: |
