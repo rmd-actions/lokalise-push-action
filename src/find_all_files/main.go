@@ -7,14 +7,17 @@ import (
 	"github.com/bodrovis/lokalise-actions-common/v2/githuboutput"
 )
 
-// exitFunc is a function variable that defaults to os.Exit.
-// Overridable in tests to assert exit behavior without terminating the process.
-var exitFunc = os.Exit
-
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	if err := run(); err != nil {
-		returnWithError(err.Error())
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
 	}
+
+	return 0
 }
 
 func run() error {
@@ -26,13 +29,18 @@ func run() error {
 	)
 }
 
-type findFunc func([]string, bool, string, []string, string) ([]string, error)
+type (
+	validateFunc func() (config, error)
+	findFunc     func([]string, bool, string, []string, string) ([]string, error)
+	writeFunc    func(string, string) bool
+	processFunc  func([]string, writeFunc) error
+)
 
 func runWith(
-	validate func() (config, error),
+	validate validateFunc,
 	find findFunc,
-	process func([]string, func(string, string) bool) error,
-	write func(string, string) bool,
+	process processFunc,
+	write writeFunc,
 ) error {
 	// Read and validate required env variables.
 	cfg, err := validate()
@@ -52,16 +60,12 @@ func runWith(
 		return fmt.Errorf("unable to find translation files: %w", err)
 	}
 
+	fmt.Fprintf(os.Stderr, "Found %d unique files\n", len(allFiles))
+
 	// Write outputs for downstream workflow steps.
 	if err := process(allFiles, write); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// returnWithError prints an error and exits with a non-zero code.
-func returnWithError(message string) {
-	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-	exitFunc(1)
 }

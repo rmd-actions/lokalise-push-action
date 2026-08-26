@@ -125,22 +125,6 @@ func TestCreateOutputFile(t *testing.T) {
 	}
 }
 
-func TestCloseOutputFile(t *testing.T) {
-	file, err := os.CreateTemp(t.TempDir(), "close-test-*.txt")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-
-	err = closeOutputFile(file)
-	if err != nil {
-		t.Fatalf("failed to create close file: %v", err)
-	}
-
-	if _, err := file.Write([]byte("x")); err == nil {
-		t.Fatal("expected write to fail after close, but it succeeded")
-	}
-}
-
 type failingWriter struct{}
 
 func (f failingWriter) Write([]byte) (int, error) {

@@ -21,7 +21,7 @@ type ClientFactory interface {
 type LokaliseFactory struct{}
 
 // NewUploader wires lokex client with our retry, timeout, and polling settings.
-func (f *LokaliseFactory) NewUploader(cfg UploadConfig) (Uploader, error) {
+func (LokaliseFactory) NewUploader(cfg UploadConfig) (Uploader, error) {
 	lokaliseClient, err := client.NewClient(
 		cfg.Token,
 		cfg.ProjectID,

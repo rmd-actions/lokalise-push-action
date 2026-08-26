@@ -16,7 +16,7 @@ type envConfig struct {
 	FlatNaming  bool
 }
 
-// validateEnvironment reads required variables and applies simple inference.
+// validateEnvironment reads and validates environment variables.
 func validateEnvironment() (envConfig, error) {
 	paths, err := parseTranslationsPaths()
 	if err != nil {
