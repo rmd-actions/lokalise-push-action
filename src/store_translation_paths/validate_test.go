@@ -2,7 +2,7 @@ package main
 
 import (
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -297,13 +297,13 @@ func TestValidateEnvironment(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if !reflect.DeepEqual(got.Paths, tt.wantPaths) {
+			if !slices.Equal(got.Paths, tt.wantPaths) {
 				t.Fatalf("paths mismatch. want=%v got=%v", tt.wantPaths, got.Paths)
 			}
 			if got.BaseLang != tt.wantBaseLang {
 				t.Fatalf("baseLang mismatch. want=%q got=%q", tt.wantBaseLang, got.BaseLang)
 			}
-			if !reflect.DeepEqual(got.FileExts, tt.wantFileExt) {
+			if !slices.Equal(got.FileExts, tt.wantFileExt) {
 				t.Fatalf("fileExt mismatch. want=%v got=%v", tt.wantFileExt, got.FileExts)
 			}
 			if filepath.ToSlash(got.NamePattern) != filepath.ToSlash(tt.wantNamePattern) {

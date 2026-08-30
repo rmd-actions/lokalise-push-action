@@ -1,10 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -20,9 +19,10 @@ type storePathsFunc func(cfg envConfig, writer io.Writer) error
 func storeTranslationPaths(cfg envConfig, writer io.Writer) error {
 	seen := make(map[string]struct{}) // avoid duplicates across roots/exts
 
-	// Sort extensions to keep output deterministic while preserving root order.
-	exts := append([]string(nil), cfg.FileExts...)
-	sort.Strings(exts)
+	// Sort extensions for stable output independent of input order,
+	// while preserving root order.
+	exts := slices.Clone(cfg.FileExts)
+	slices.Sort(exts)
 
 	for _, root := range cfg.Paths {
 		if cfg.NamePattern != "" {
@@ -54,10 +54,8 @@ func storeTranslationPaths(cfg envConfig, writer io.Writer) error {
 // buildTranslationPattern builds the pathspec for a single root/extension pair.
 func buildTranslationPattern(root string, flatNaming bool, baseLang, ext string) string {
 	if flatNaming {
-		// <root>/<baseLang>.<ext>
-		return filepath.Join(root, fmt.Sprintf("%s.%s", baseLang, ext))
+		return filepath.Join(root, baseLang+"."+ext)
 	}
 
-	// <root>/<baseLang>/**/*.ext
-	return filepath.Join(root, baseLang, "**", fmt.Sprintf("*.%s", ext))
+	return filepath.Join(root, baseLang, "**", "*."+ext)
 }

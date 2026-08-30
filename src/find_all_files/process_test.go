@@ -1,7 +1,8 @@
 package main
 
 import (
-	"reflect"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -109,10 +110,10 @@ func TestProcessAllFiles(t *testing.T) {
 				wantWrites = map[string]string{}
 			}
 
-			if !reflect.DeepEqual(writes, wantWrites) {
+			if !maps.Equal(writes, wantWrites) {
 				t.Fatalf("writes mismatch. want=%v got=%v", wantWrites, writes)
 			}
-			if !reflect.DeepEqual(order, tt.wantWriteOrder) {
+			if !slices.Equal(order, tt.wantWriteOrder) {
 				t.Fatalf("write order mismatch. want=%v got=%v", tt.wantWriteOrder, order)
 			}
 		})

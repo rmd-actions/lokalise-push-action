@@ -5,24 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
-
-func TestMain(m *testing.M) {
-	// Override exitFunc for testing.
-	exitFunc = func(code int) {
-		panic(fmt.Sprintf("Exit called with code %d", code))
-	}
-
-	code := m.Run()
-
-	// Restore exitFunc after testing.
-	exitFunc = os.Exit
-
-	os.Exit(code)
-}
 
 func TestRunWith(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
@@ -62,9 +48,8 @@ func TestRunWith(t *testing.T) {
 		store := func(cfg envConfig, writer io.Writer) error {
 			storeCalled = true
 
-			if !reflect.DeepEqual(cfg, wantCfg) {
-				t.Fatalf("cfg mismatch.\nwant=%#v\ngot=%#v", wantCfg, cfg)
-			}
+			assertConfigEqual(t, cfg, wantCfg)
+
 			if writer != createdFile {
 				t.Fatalf("writer mismatch. want=%v got=%v", createdFile, writer)
 			}
@@ -181,6 +166,8 @@ func TestRunWith(t *testing.T) {
 			FlatNaming: true,
 		}
 
+		storeErr := errors.New("disk full")
+
 		var createdFile *os.File
 		closeCalled := false
 
@@ -193,24 +180,30 @@ func TestRunWith(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create temp file: %v", err)
 			}
+
 			createdFile = f
 			return f, nil
 		}
 
 		store := func(cfg envConfig, writer io.Writer) error {
-			if !reflect.DeepEqual(cfg, wantCfg) {
-				t.Fatalf("cfg mismatch.\nwant=%#v\ngot=%#v", wantCfg, cfg)
-			}
+			assertConfigEqual(t, cfg, wantCfg)
+
 			if writer != createdFile {
 				t.Fatalf("writer mismatch. want=%v got=%v", createdFile, writer)
 			}
-			return errors.New("disk full")
+
+			return storeErr
 		}
 
 		closeFile := func(file *os.File) error {
 			closeCalled = true
+
 			if file != createdFile {
-				return fmt.Errorf("closeFile got unexpected file. want=%v got=%v", createdFile, file)
+				return fmt.Errorf(
+					"closeFile got unexpected file. want=%v got=%v",
+					createdFile,
+					file,
+				)
 			}
 
 			return file.Close()
@@ -221,14 +214,52 @@ func TestRunWith(t *testing.T) {
 			t.Fatal("expected error, got nil")
 		}
 
+		if !errors.Is(err, storeErr) {
+			t.Fatalf("expected error wrapping %v, got %v", storeErr, err)
+		}
+
 		if !strings.Contains(err.Error(), "cannot store translation paths") {
-			t.Fatalf("expected wrapped error containing %q, got %q", "cannot store translation paths", err.Error())
+			t.Fatalf(
+				"expected error containing %q, got %q",
+				"cannot store translation paths",
+				err.Error(),
+			)
 		}
-		if !strings.Contains(err.Error(), "disk full") {
-			t.Fatalf("expected wrapped error containing %q, got %q", "disk full", err.Error())
-		}
+
 		if !closeCalled {
 			t.Fatal("closeFile was not called")
 		}
 	})
+}
+
+func assertConfigEqual(t *testing.T, got, want envConfig) {
+	t.Helper()
+
+	if !slices.Equal(got.Paths, want.Paths) {
+		t.Fatalf("paths mismatch. want=%v got=%v", want.Paths, got.Paths)
+	}
+
+	if got.BaseLang != want.BaseLang {
+		t.Fatalf("baseLang mismatch. want=%q got=%q", want.BaseLang, got.BaseLang)
+	}
+
+	if !slices.Equal(got.FileExts, want.FileExts) {
+		t.Fatalf("fileExts mismatch. want=%v got=%v", want.FileExts, got.FileExts)
+	}
+
+	if got.NamePattern != want.NamePattern {
+		t.Fatalf(
+			"namePattern mismatch. want=%q got=%q",
+			want.NamePattern,
+			got.NamePattern,
+		)
+	}
+
+	if got.FlatNaming != want.FlatNaming {
+		t.Fatalf(
+			"flatNaming mismatch. want=%v got=%v",
+			want.FlatNaming,
+			got.FlatNaming,
+		)
+	}
 }
