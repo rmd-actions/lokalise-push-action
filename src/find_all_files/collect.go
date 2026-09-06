@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -13,8 +16,7 @@ import (
 // fileCollector accumulates unique file paths and normalizes them to forward slashes
 // to keep output deterministic across operating systems.
 type fileCollector struct {
-	seen  map[string]struct{}
-	files []string
+	seen map[string]struct{}
 }
 
 func newFileCollector() *fileCollector {
@@ -24,39 +26,32 @@ func newFileCollector() *fileCollector {
 }
 
 func (c *fileCollector) add(path string) {
-	path = filepath.ToSlash(path)
-	if _, ok := c.seen[path]; ok {
-		return
-	}
-	c.seen[path] = struct{}{}
-	c.files = append(c.files, path)
+	c.seen[filepath.ToSlash(path)] = struct{}{}
 }
 
 func (c *fileCollector) sorted() []string {
-	out := append([]string(nil), c.files...)
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(c.seen))
 }
 
 // collectFilesByPattern applies NAME_PATTERN relative to the given root.
 // The pattern is evaluated against os.DirFS("."), so it must be repo-relative
 // and must not start with "./".
 func collectFilesByPattern(root, namePattern string, add func(string)) error {
-	pattern := filepath.ToSlash(filepath.Join(root, namePattern))
+	pattern := filepath.ToSlash(namePattern)
 	pattern = strings.TrimPrefix(pattern, "./")
 
-	globOpts := []doublestar.GlobOption{
+	err := doublestar.GlobWalk(
+		os.DirFS(root),
+		pattern,
+		func(match string, _ fs.DirEntry) error {
+			add(filepath.Join(root, filepath.FromSlash(match)))
+			return nil
+		},
 		doublestar.WithFilesOnly(),
 		doublestar.WithFailOnIOErrors(),
-	}
-
-	matches, err := doublestar.Glob(os.DirFS("."), pattern, globOpts...)
+	)
 	if err != nil {
-		return fmt.Errorf("apply name pattern %q: %w", pattern, err)
-	}
-
-	for _, match := range matches {
-		add(match)
+		return fmt.Errorf("apply name pattern %q in %q: %w", pattern, root, err)
 	}
 
 	return nil
@@ -70,7 +65,7 @@ func collectFilesByPattern(root, namePattern string, add func(string)) error {
 func collectFlatFiles(root, baseLang string, fileExts []string, add func(string)) error {
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("error reading directory %q: %w", root, err)
@@ -110,7 +105,7 @@ func collectNestedFiles(root, baseLang string, fileExts []string, add func(strin
 
 	info, err := os.Stat(targetDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("error accessing directory %q: %w", targetDir, err)
@@ -122,7 +117,7 @@ func collectNestedFiles(root, baseLang string, fileExts []string, add func(strin
 
 	return filepath.WalkDir(targetDir, func(fp string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			return fmt.Errorf("error walking through directory %q: %w", targetDir, walkErr)
+			return fmt.Errorf("walk %q: %w", fp, walkErr)
 		}
 		if d.IsDir() {
 			return nil
@@ -137,10 +132,13 @@ func collectNestedFiles(root, baseLang string, fileExts []string, add func(strin
 // hasMatchingExtension reports whether the file name ends with one of the allowed extensions.
 // Comparison is case-insensitive.
 func hasMatchingExtension(name string, fileExts []string) bool {
+	fileExt := filepath.Ext(name)
+
 	for _, ext := range fileExts {
-		if strings.EqualFold(filepath.Ext(name), "."+ext) {
+		if strings.EqualFold(fileExt, "."+ext) {
 			return true
 		}
 	}
+
 	return false
 }

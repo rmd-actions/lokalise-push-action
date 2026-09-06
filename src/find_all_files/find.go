@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 )
 
 // findAllTranslationFiles scans each configured root using the chosen strategy.
@@ -10,7 +9,13 @@ import (
 //   - NAME_PATTERN (if provided) overrides layout rules and is treated as a glob under the root.
 //   - Flat:   collect "<root>/<baseLang>.<ext>" if present.
 //   - Nested: walk "<root>/<baseLang>" and collect files ending with ".<ext>".
-func findAllTranslationFiles(paths []string, flatNaming bool, baseLang string, fileExts []string, namePattern string) ([]string, error) {
+func findAllTranslationFiles(
+	paths []string,
+	flatNaming bool,
+	baseLang string,
+	fileExts []string,
+	namePattern string,
+) ([]string, error) {
 	collector := newFileCollector()
 
 	for _, root := range paths {
@@ -29,12 +34,13 @@ func findAllTranslationFiles(paths []string, flatNaming bool, baseLang string, f
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("cannot collect translation files under %q: %w", root, err)
+			return nil, fmt.Errorf(
+				"cannot collect translation files under %q: %w",
+				root,
+				err,
+			)
 		}
 	}
 
-	files := collector.sorted()
-	fmt.Fprintf(os.Stderr, "Found %d unique files\n", len(files))
-
-	return files, nil
+	return collector.sorted(), nil
 }
