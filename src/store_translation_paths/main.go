@@ -6,14 +6,17 @@ import (
 	"os"
 )
 
-// exitFunc is a function variable that defaults to os.Exit.
-// Overridable in tests to assert exit behavior without terminating the process.
-var exitFunc = os.Exit
-
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	if err := run(); err != nil {
-		returnWithError(err.Error())
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 1
 	}
+
+	return 0
 }
 
 func run() error {
@@ -21,14 +24,16 @@ func run() error {
 		validateEnvironment,
 		createOutputFile,
 		storeTranslationPaths,
-		closeOutputFile,
+		storeExcludedPaths,
+		(*os.File).Close,
 	)
 }
 
 func runWith(
 	validate func() (envConfig, error),
-	createFile func() (*os.File, error),
-	store storePathsFunc,
+	createFile func(string) (*os.File, error),
+	storePaths storePathsFunc,
+	storeExcluded storePathsFunc,
 	closeFile func(*os.File) error,
 ) (err error) {
 	// Read and validate inputs from the environment.
@@ -37,30 +42,47 @@ func runWith(
 		return err
 	}
 
-	// We persist the generated pathspecs to a file that is later consumed by
-	// tj-actions/changed-files via `files_from_source_file`.
-	file, err := createFile()
+	// Include pathspecs consumed by changed-files via files_from_source_file.
+	pathsFile, err := createFile(pathsFileName)
 	if err != nil {
-		return fmt.Errorf("cannot create output file: %w", err)
+		return fmt.Errorf("cannot create translation paths output file: %w", err)
 	}
 
 	defer func() {
-		if closeErr := closeFile(file); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("cannot close output file: %w", closeErr))
+		if closeErr := closeFile(pathsFile); closeErr != nil {
+			err = errors.Join(
+				err,
+				fmt.Errorf("cannot close translation paths output file: %w", closeErr),
+			)
 		}
 	}()
 
-	// Emit one pathspec per line. Consumers expect newline-separated patterns.
-	// Each line can be a direct file path or a glob (git pathspec-style).
-	if err := store(cfg, file); err != nil {
+	// Exclude pathspecs consumed by changed-files via
+	// files_ignore_from_source_file.
+	excludePathsFile, err := createFile(excludePathsFileName)
+	if err != nil {
+		return fmt.Errorf("cannot create excluded paths output file: %w", err)
+	}
+
+	defer func() {
+		if closeErr := closeFile(excludePathsFile); closeErr != nil {
+			err = errors.Join(
+				err,
+				fmt.Errorf("cannot close excluded paths output file: %w", closeErr),
+			)
+		}
+	}()
+
+	// Emit include pathspecs.
+	if err := storePaths(cfg, pathsFile); err != nil {
 		return fmt.Errorf("cannot store translation paths: %w", err)
 	}
 
-	return nil
-}
+	// Emit exclude pathspecs. The output file is created even when there are
+	// no exclude patterns, so the workflow can reference it unconditionally.
+	if err := storeExcluded(cfg, excludePathsFile); err != nil {
+		return fmt.Errorf("cannot store excluded paths: %w", err)
+	}
 
-// returnWithError prints an error and exits non-zero.
-func returnWithError(message string) {
-	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-	exitFunc(1)
+	return nil
 }

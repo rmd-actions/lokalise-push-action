@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 )
 
@@ -23,13 +25,13 @@ func validate(cfg UploadConfig) error {
 // validateRequiredFields checks the minimum required Lokalise settings.
 func validateRequiredFields(cfg UploadConfig) error {
 	if cfg.ProjectID == "" {
-		return fmt.Errorf("project ID is required and cannot be empty")
+		return errors.New("project ID is required and cannot be empty")
 	}
 	if cfg.Token == "" {
-		return fmt.Errorf("API token is required and cannot be empty")
+		return errors.New("API token is required and cannot be empty")
 	}
 	if cfg.LangISO == "" {
-		return fmt.Errorf("base language (BASE_LANG) is required and cannot be empty")
+		return errors.New("base language (BASE_LANG) is required and cannot be empty")
 	}
 	return nil
 }
@@ -37,15 +39,19 @@ func validateRequiredFields(cfg UploadConfig) error {
 // validateTaggingInputs ensures branch metadata is available when tagging is enabled.
 func validateTaggingInputs(cfg UploadConfig) error {
 	if !cfg.SkipTagging && cfg.GitHubRefName == "" {
-		return fmt.Errorf("GitHub reference name (GITHUB_HEAD_REF or GITHUB_REF_NAME) is required when tagging is enabled")
+		return errors.New("GitHub reference name (GITHUB_HEAD_REF or GITHUB_REF_NAME) is required when tagging is enabled")
 	}
 	return nil
 }
 
 // validateFile ensures the path exists and points to a regular file.
 func validateFile(filePath string) error {
+	if filePath == "" {
+		return errors.New("file path is required and cannot be empty")
+	}
+
 	fi, err := os.Stat(filePath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("file %q does not exist", filePath)
 	}
 	if err != nil {

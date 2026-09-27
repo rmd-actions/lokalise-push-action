@@ -89,8 +89,8 @@ func TestPrepareConfig(t *testing.T) {
 				if cfg.InitialSleepTime != time.Duration(defaultInitialSleepTime)*time.Second {
 					t.Fatalf("expected InitialSleepTime=%v, got %v", time.Duration(defaultInitialSleepTime)*time.Second, cfg.InitialSleepTime)
 				}
-				if cfg.MaxSleepTime != time.Duration(maxSleepTime)*time.Second {
-					t.Fatalf("expected MaxSleepTime=%v, got %v", time.Duration(maxSleepTime)*time.Second, cfg.MaxSleepTime)
+				if cfg.MaxSleepTime != maxSleepTime {
+					t.Fatalf("expected MaxSleepTime=%v, got %v", maxSleepTime, cfg.MaxSleepTime)
 				}
 				if cfg.UploadTimeout != time.Duration(defaultUploadTimeout)*time.Second {
 					t.Fatalf("expected UploadTimeout=%v, got %v", time.Duration(defaultUploadTimeout)*time.Second, cfg.UploadTimeout)
@@ -161,8 +161,8 @@ func TestPrepareConfig(t *testing.T) {
 				if cfg.InitialSleepTime != 5*time.Second {
 					t.Fatalf("expected InitialSleepTime=5s, got %v", cfg.InitialSleepTime)
 				}
-				if cfg.MaxSleepTime != time.Duration(maxSleepTime)*time.Second {
-					t.Fatalf("expected MaxSleepTime=%v, got %v", time.Duration(maxSleepTime)*time.Second, cfg.MaxSleepTime)
+				if cfg.MaxSleepTime != maxSleepTime {
+					t.Fatalf("expected MaxSleepTime=%v, got %v", maxSleepTime, cfg.MaxSleepTime)
 				}
 				if cfg.UploadTimeout != 42*time.Second {
 					t.Fatalf("expected UploadTimeout=42s, got %v", cfg.UploadTimeout)

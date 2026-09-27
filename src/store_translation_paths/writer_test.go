@@ -93,51 +93,67 @@ func TestWriteUniqueLine(t *testing.T) {
 }
 
 func TestCreateOutputFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get wd: %v", err)
-	}
-	defer func() {
-		_ = os.Chdir(oldWd)
-	}()
-
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("failed to chdir: %v", err)
-	}
-
-	file, err := createOutputFile()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	expectedPath := filepath.Join(".git", "lokalise-action", "paths.txt")
-
-	if filepath.Clean(file.Name()) != expectedPath {
-		t.Fatalf("unexpected file name: want=%q got=%q", expectedPath, file.Name())
+	tests := []struct {
+		name     string
+		fileName string
+	}{
+		{
+			name:     "creates include paths file",
+			fileName: pathsFileName,
+		},
+		{
+			name:     "creates exclude paths file",
+			fileName: excludePathsFileName,
+		},
 	}
 
-	if _, err := os.Stat(expectedPath); err != nil {
-		t.Fatalf("expected file to exist, stat failed: %v", err)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
 
-func TestCloseOutputFile(t *testing.T) {
-	file, err := os.CreateTemp(t.TempDir(), "close-test-*.txt")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
+			oldWd, err := os.Getwd()
+			if err != nil {
+				t.Fatalf("failed to get wd: %v", err)
+			}
 
-	err = closeOutputFile(file)
-	if err != nil {
-		t.Fatalf("failed to create close file: %v", err)
-	}
+			defer func() {
+				_ = os.Chdir(oldWd)
+			}()
 
-	if _, err := file.Write([]byte("x")); err == nil {
-		t.Fatal("expected write to fail after close, but it succeeded")
+			if err := os.Chdir(tmpDir); err != nil {
+				t.Fatalf("failed to chdir: %v", err)
+			}
+
+			file, err := createOutputFile(tt.fileName)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			defer func() {
+				_ = file.Close()
+			}()
+
+			expectedPath := filepath.Join(
+				".git",
+				"lokalise-action",
+				tt.fileName,
+			)
+
+			if filepath.Clean(file.Name()) != expectedPath {
+				t.Fatalf(
+					"unexpected file name: want=%q got=%q",
+					expectedPath,
+					file.Name(),
+				)
+			}
+
+			if _, err := os.Stat(expectedPath); err != nil {
+				t.Fatalf(
+					"expected file to exist, stat failed: %v",
+					err,
+				)
+			}
+		})
 	}
 }
 
