@@ -2,11 +2,10 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -14,7 +13,6 @@ import (
 var baseTestDir string // Shared read-only test fixture directory for this package.
 
 func TestMain(m *testing.M) {
-	// Create shared directory structure.
 	dir, err := os.MkdirTemp(".", "find-all-files-test-*")
 	if err != nil {
 		panic(err)
@@ -27,21 +25,13 @@ func TestMain(m *testing.M) {
 
 	baseTestDir = relDir
 
-	err = setupTestFileStructure(baseTestDir)
-	if err != nil {
+	if err := setupTestFileStructure(baseTestDir); err != nil {
 		panic(err)
-	}
-
-	// Override exitFunc for testing.
-	exitFunc = func(code int) {
-		panic(fmt.Sprintf("Exit called with code %d", code))
 	}
 
 	code := m.Run()
 
-	// Cleanup.
-	err = os.RemoveAll(baseTestDir)
-	if err != nil {
+	if err := os.RemoveAll(baseTestDir); err != nil {
 		log.Printf("Failed to remove %s: %v", baseTestDir, err)
 	}
 
@@ -117,11 +107,12 @@ func TestRunWith(t *testing.T) {
 		t.Parallel()
 
 		wantCfg := config{
-			Paths:       []string{"translations", "locales"},
-			BaseLang:    "en",
-			FileExts:    []string{"json", "yaml"},
-			NamePattern: "",
-			FlatNaming:  true,
+			Paths:           []string{"translations", "locales"},
+			BaseLang:        "en",
+			FileExts:        []string{"json", "yaml"},
+			NamePattern:     "",
+			FlatNaming:      true,
+			ExcludePatterns: nil,
 		}
 		wantFiles := []string{"translations/en.json", "locales/en.yaml"}
 
@@ -135,10 +126,10 @@ func TestRunWith(t *testing.T) {
 			return wantCfg, nil
 		}
 
-		find := func(paths []string, flatNaming bool, baseLang string, fileExts []string, namePattern string) ([]string, error) {
+		find := func(paths []string, flatNaming bool, baseLang string, fileExts []string, namePattern string, excludePatterns []string) ([]string, error) {
 			findCalled = true
 
-			if !reflect.DeepEqual(paths, wantCfg.Paths) {
+			if !slices.Equal(paths, wantCfg.Paths) {
 				t.Fatalf("paths mismatch. want=%v got=%v", wantCfg.Paths, paths)
 			}
 			if flatNaming != wantCfg.FlatNaming {
@@ -147,7 +138,7 @@ func TestRunWith(t *testing.T) {
 			if baseLang != wantCfg.BaseLang {
 				t.Fatalf("baseLang mismatch. want=%q got=%q", wantCfg.BaseLang, baseLang)
 			}
-			if !reflect.DeepEqual(fileExts, wantCfg.FileExts) {
+			if !slices.Equal(fileExts, wantCfg.FileExts) {
 				t.Fatalf("fileExts mismatch. want=%v got=%v", wantCfg.FileExts, fileExts)
 			}
 			if namePattern != wantCfg.NamePattern {
@@ -157,10 +148,13 @@ func TestRunWith(t *testing.T) {
 			return wantFiles, nil
 		}
 
-		process := func(allFiles []string, writeOutput func(string, string) bool) error {
+		process := func(
+			allFiles []string,
+			writeOutput writeFunc,
+		) error {
 			processCalled = true
 
-			if !reflect.DeepEqual(allFiles, wantFiles) {
+			if !slices.Equal(allFiles, wantFiles) {
 				t.Fatalf("allFiles mismatch. want=%v got=%v", wantFiles, allFiles)
 			}
 
@@ -202,12 +196,15 @@ func TestRunWith(t *testing.T) {
 			return config{}, errors.New("bad env")
 		}
 
-		find := func([]string, bool, string, []string, string) ([]string, error) {
+		find := func([]string, bool, string, []string, string, []string) ([]string, error) {
 			t.Fatal("find should not be called")
 			return nil, nil
 		}
 
-		process := func([]string, func(string, string) bool) error {
+		process := func(
+			allFiles []string,
+			writeOutput writeFunc,
+		) error {
 			t.Fatal("process should not be called")
 			return nil
 		}
@@ -231,19 +228,30 @@ func TestRunWith(t *testing.T) {
 
 		validate := func() (config, error) {
 			return config{
-				Paths:       []string{"translations"},
-				BaseLang:    "en",
-				FileExts:    []string{"json"},
-				NamePattern: "",
-				FlatNaming:  false,
+				Paths:           []string{"translations"},
+				BaseLang:        "en",
+				FileExts:        []string{"json"},
+				NamePattern:     "",
+				FlatNaming:      false,
+				ExcludePatterns: nil,
 			}, nil
 		}
 
-		find := func([]string, bool, string, []string, string) ([]string, error) {
+		find := func(
+			[]string,
+			bool,
+			string,
+			[]string,
+			string,
+			[]string,
+		) ([]string, error) {
 			return nil, errors.New("glob exploded")
 		}
 
-		process := func([]string, func(string, string) bool) error {
+		process := func(
+			allFiles []string,
+			writeOutput writeFunc,
+		) error {
 			t.Fatal("process should not be called")
 			return nil
 		}
@@ -280,12 +288,15 @@ func TestRunWith(t *testing.T) {
 			}, nil
 		}
 
-		find := func([]string, bool, string, []string, string) ([]string, error) {
+		find := func([]string, bool, string, []string, string, []string) ([]string, error) {
 			return wantFiles, nil
 		}
 
-		process := func(allFiles []string, writeOutput func(string, string) bool) error {
-			if !reflect.DeepEqual(allFiles, wantFiles) {
+		process := func(
+			allFiles []string,
+			writeOutput writeFunc,
+		) error {
+			if !slices.Equal(allFiles, wantFiles) {
 				t.Fatalf("allFiles mismatch. want=%v got=%v", wantFiles, allFiles)
 			}
 			return errors.New("cannot write ALL_FILES to GITHUB_OUTPUT")

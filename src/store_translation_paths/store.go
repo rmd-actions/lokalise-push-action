@@ -1,17 +1,17 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
 type storePathsFunc func(cfg envConfig, writer io.Writer) error
 
-// storeTranslationPaths emits one pathspec per root and (if applicable) per extension.
-// Output is newline-separated, ready for consumption by changed-files (files_from_source_file).
+// storeTranslationPaths emits include pathspecs for translation files.
+// Output is newline-separated, ready for consumption by changed-files
+// (files_from_source_file).
 // Rules:
 //   - If namePattern is set, it fully overrides defaults and is written once per root.
 //     The pattern may include globs (e.g., "**/*.yaml") and/or a concrete filename.
@@ -20,9 +20,10 @@ type storePathsFunc func(cfg envConfig, writer io.Writer) error
 func storeTranslationPaths(cfg envConfig, writer io.Writer) error {
 	seen := make(map[string]struct{}) // avoid duplicates across roots/exts
 
-	// Sort extensions to keep output deterministic while preserving root order.
-	exts := append([]string(nil), cfg.FileExts...)
-	sort.Strings(exts)
+	// Sort extensions for stable output independent of input order,
+	// while preserving root order.
+	exts := slices.Clone(cfg.FileExts)
+	slices.Sort(exts)
 
 	for _, root := range cfg.Paths {
 		if cfg.NamePattern != "" {
@@ -51,13 +52,41 @@ func storeTranslationPaths(cfg envConfig, writer io.Writer) error {
 	return nil
 }
 
+// storeExcludedPaths emits exclude pathspecs relative to each configured root.
+//
+// EXCLUDE_PATTERNS are interpreted relative to every TRANSLATIONS_PATH entry.
+// Output is newline-separated, ready for consumption by changed-files
+// (files_ignore_from_source_file).
+func storeExcludedPaths(cfg envConfig, writer io.Writer) error {
+	seen := make(map[string]struct{})
+
+	patterns := slices.Clone(cfg.ExcludePatterns)
+	slices.Sort(patterns)
+
+	for _, root := range cfg.Paths {
+		for _, pattern := range patterns {
+			if pattern == "" {
+				continue
+			}
+
+			if err := writeUniqueLine(
+				writer,
+				seen,
+				filepath.Join(root, filepath.FromSlash(pattern)),
+			); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // buildTranslationPattern builds the pathspec for a single root/extension pair.
 func buildTranslationPattern(root string, flatNaming bool, baseLang, ext string) string {
 	if flatNaming {
-		// <root>/<baseLang>.<ext>
-		return filepath.Join(root, fmt.Sprintf("%s.%s", baseLang, ext))
+		return filepath.Join(root, baseLang+"."+ext)
 	}
 
-	// <root>/<baseLang>/**/*.ext
-	return filepath.Join(root, baseLang, "**", fmt.Sprintf("*.%s", ext))
+	return filepath.Join(root, baseLang, "**", "*."+ext)
 }
