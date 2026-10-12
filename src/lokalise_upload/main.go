@@ -2,21 +2,29 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 )
 
-// exitFunc is a function variable that defaults to os.Exit.
-// Overridable in tests to assert exit behavior without terminating the process.
-var exitFunc = os.Exit
-
-type uploaderFunc func(context.Context, UploadConfig, ClientFactory) error
+type (
+	prepareFunc  func(string) (UploadConfig, error)
+	validateFunc func(UploadConfig) error
+	uploaderFunc func(context.Context, UploadConfig, ClientFactory) error
+)
 
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	if err := run(); err != nil {
-		returnWithError(err.Error())
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 1
 	}
+
+	return 0
 }
 
 func run() error {
@@ -25,14 +33,14 @@ func run() error {
 		prepareConfig,
 		validate,
 		uploadFile,
-		&LokaliseFactory{},
+		LokaliseFactory{},
 	)
 }
 
 func runWith(
 	args []string,
-	prepare func(string) (UploadConfig, error),
-	validate func(UploadConfig) error,
+	prepare prepareFunc,
+	validate validateFunc,
 	upload uploaderFunc,
 	factory ClientFactory,
 ) error {
@@ -59,19 +67,13 @@ func runWith(
 // parseCLIArgs validates the CLI input and returns the target file path.
 func parseCLIArgs(args []string) (string, error) {
 	if len(args) != 2 {
-		return "", fmt.Errorf("usage: lokalise_upload <file>")
+		return "", errors.New("usage: lokalise_upload <file>")
 	}
 
 	filePath := strings.TrimSpace(args[1])
 	if filePath == "" {
-		return "", fmt.Errorf("file path is empty")
+		return "", errors.New("file path is empty")
 	}
 
 	return filePath, nil
-}
-
-// returnWithError prints an error message to stderr and exits the program with a non-zero status code.
-func returnWithError(message string) {
-	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-	exitFunc(1)
 }

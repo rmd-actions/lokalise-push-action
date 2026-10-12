@@ -3,29 +3,17 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
-
-func TestMain(m *testing.M) {
-	// Hijack os.Exit so tests can assert hard exits.
-	exitFunc = func(code int) { panic(fmt.Sprintf("Exit called with code %d", code)) }
-
-	code := m.Run()
-
-	// Restore.
-	exitFunc = os.Exit
-	os.Exit(code)
-}
 
 func TestRunWith(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		t.Parallel()
 
 		args := []string{"lokalise_upload", "  file.json  "}
+
 		wantCfg := UploadConfig{
 			FilePath:      "file.json",
 			ProjectID:     "proj",
@@ -39,33 +27,43 @@ func TestRunWith(t *testing.T) {
 		validateCalled := false
 		uploadCalled := false
 
-		factory := &LokaliseFactory{}
+		factory := LokaliseFactory{}
 
 		prepare := func(filePath string) (UploadConfig, error) {
 			prepareCalled = true
+
 			if filePath != "file.json" {
 				t.Fatalf("prepare got filePath=%q, want %q", filePath, "file.json")
 			}
+
 			return wantCfg, nil
 		}
 
 		validateFn := func(cfg UploadConfig) error {
 			validateCalled = true
+
 			if cfg != wantCfg {
 				t.Fatalf("validate got cfg=%#v, want %#v", cfg, wantCfg)
 			}
+
 			return nil
 		}
 
-		upload := func(ctx context.Context, cfg UploadConfig, gotFactory ClientFactory) error {
+		upload := func(
+			ctx context.Context,
+			cfg UploadConfig,
+			gotFactory ClientFactory,
+		) error {
 			uploadCalled = true
 
 			if cfg != wantCfg {
 				t.Fatalf("upload got cfg=%#v, want %#v", cfg, wantCfg)
 			}
+
 			if gotFactory != factory {
 				t.Fatalf("upload got unexpected factory: %#v", gotFactory)
 			}
+
 			if _, ok := ctx.Deadline(); !ok {
 				t.Fatal("upload context has no deadline")
 			}
@@ -81,9 +79,11 @@ func TestRunWith(t *testing.T) {
 		if !prepareCalled {
 			t.Fatal("prepare was not called")
 		}
+
 		if !validateCalled {
 			t.Fatal("validate was not called")
 		}
+
 		if !uploadCalled {
 			t.Fatal("upload was not called")
 		}
@@ -109,7 +109,7 @@ func TestRunWith(t *testing.T) {
 			return nil
 		}
 
-		err := runWith(args, prepare, validateFn, upload, &LokaliseFactory{})
+		err := runWith(args, prepare, validateFn, upload, LokaliseFactory{})
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -122,12 +122,14 @@ func TestRunWith(t *testing.T) {
 		t.Parallel()
 
 		args := []string{"lokalise_upload", "file.json"}
+		prepareErr := errors.New("bad config")
 
 		prepare := func(filePath string) (UploadConfig, error) {
 			if filePath != "file.json" {
 				t.Fatalf("prepare got filePath=%q, want %q", filePath, "file.json")
 			}
-			return UploadConfig{}, errors.New("bad config")
+
+			return UploadConfig{}, prepareErr
 		}
 
 		validateFn := func(UploadConfig) error {
@@ -140,12 +142,19 @@ func TestRunWith(t *testing.T) {
 			return nil
 		}
 
-		err := runWith(args, prepare, validateFn, upload, &LokaliseFactory{})
+		err := runWith(
+			args,
+			prepare,
+			validateFn,
+			upload,
+			LokaliseFactory{},
+		)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "bad config") {
-			t.Fatalf("unexpected error: %v", err)
+
+		if !errors.Is(err, prepareErr) {
+			t.Fatalf("expected error wrapping %v, got %v", prepareErr, err)
 		}
 	})
 
@@ -175,7 +184,7 @@ func TestRunWith(t *testing.T) {
 			return nil
 		}
 
-		err := runWith(args, prepare, validateFn, upload, &LokaliseFactory{})
+		err := runWith(args, prepare, validateFn, upload, LokaliseFactory{})
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -198,7 +207,7 @@ func TestRunWith(t *testing.T) {
 			UploadTimeout: 5 * time.Second,
 		}
 
-		factory := &LokaliseFactory{}
+		factory := LokaliseFactory{}
 
 		prepare := func(string) (UploadConfig, error) {
 			return wantCfg, nil

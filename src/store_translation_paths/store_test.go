@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -293,7 +292,7 @@ func TestStoreTranslationPaths(t *testing.T) {
 			expected := normalizeLines(tt.expected)
 
 			if tt.exactOrder {
-				if !reflect.DeepEqual(lines, expected) {
+				if !slices.Equal(lines, expected) {
 					t.Fatalf("unexpected lines.\nwant=%v\ngot=%v", expected, lines)
 				}
 				return

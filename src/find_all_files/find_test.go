@@ -2,7 +2,6 @@ package main
 
 import (
 	"path/filepath"
-	"reflect"
 	"slices"
 	"testing"
 )
@@ -234,7 +233,7 @@ func TestFindAllTranslationFiles(t *testing.T) {
 			slices.Sort(actualNormalized)
 			slices.Sort(expectedNormalized)
 
-			if !reflect.DeepEqual(actualNormalized, expectedNormalized) {
+			if !slices.Equal(actualNormalized, expectedNormalized) {
 				t.Fatalf("expected files %v, got %v", expectedNormalized, actualNormalized)
 			}
 		})
@@ -259,7 +258,7 @@ func TestFindAllTranslationFiles_ReturnsSortedOutput(t *testing.T) {
 
 	slices.Sort(want)
 
-	if !reflect.DeepEqual(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("expected sorted files %v, got %v", want, got)
 	}
 }

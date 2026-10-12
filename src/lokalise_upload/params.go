@@ -8,7 +8,8 @@ import (
 )
 
 // buildUploadParams assembles the payload for the Lokalise upload endpoint.
-// AdditionalParams are merged last and may override defaults intentionally.
+// AdditionalParams are merged last and intentionally take precedence over
+// both action defaults and base upload parameters.
 func buildUploadParams(cfg UploadConfig) (upload.UploadParams, error) {
 	params := upload.UploadParams{
 		"filename": cfg.FilePath,

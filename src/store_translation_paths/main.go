@@ -6,14 +6,17 @@ import (
 	"os"
 )
 
-// exitFunc is a function variable that defaults to os.Exit.
-// Overridable in tests to assert exit behavior without terminating the process.
-var exitFunc = os.Exit
-
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	if err := run(); err != nil {
-		returnWithError(err.Error())
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 1
 	}
+
+	return 0
 }
 
 func run() error {
@@ -21,7 +24,7 @@ func run() error {
 		validateEnvironment,
 		createOutputFile,
 		storeTranslationPaths,
-		closeOutputFile,
+		(*os.File).Close,
 	)
 }
 
@@ -57,10 +60,4 @@ func runWith(
 	}
 
 	return nil
-}
-
-// returnWithError prints an error and exits non-zero.
-func returnWithError(message string) {
-	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-	exitFunc(1)
 }
