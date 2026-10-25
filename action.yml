@@ -29,6 +29,10 @@ inputs:
     description: 'Use flat naming convention (true/false). If true, expects files like locales/en.json instead of locales/en/file.json'
     required: false
     default: 'false'
+  exclude_patterns:
+    description: 'Glob patterns for translation files to exclude. Patterns are relative to each translations_path entry. Accepts multiple newline-separated values.'
+    required: false
+    default: ''
   name_pattern:
     description: 'Custom pattern for naming translation files. Overrides default language-based naming. Must include both filename and extension if applicable (e.g., "custom_name.json" or "**/*.yaml"). Default behavior is used if not set.'
     required: false
@@ -165,6 +169,7 @@ runs:
         FILE_EXT: "${{ inputs.file_ext }}"
         NAME_PATTERN: "${{ inputs.name_pattern }}"
         PLATFORM: "${{ steps.detect-platform.outputs.platform }}"
+        EXCLUDE_PATTERNS: "${{ inputs.exclude_patterns }}"
       run: |
         set -euo pipefail
 
@@ -200,7 +205,7 @@ runs:
         TAG_NAME="lokalise-sync-${BRANCH_NAME}"
         echo "Looking for tag: $TAG_NAME"
 
-        if git ls-remote --exit-code --refs --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+        if git ls-remote --exit-code --refs --tags origin "refs/tags/$TAG_NAME" >/dev/null; then
           echo "Tag '$TAG_NAME' found on remote."
           
           git fetch --force --quiet origin "+refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
@@ -212,7 +217,14 @@ runs:
           fi
           echo "Warning: tag exists on remote but could not resolve SHA locally."
         else
-          echo "Tag '$TAG_NAME' not found on remote."
+          status=$?
+
+          if [ "$status" -eq 2 ]; then
+            echo "Tag '$TAG_NAME' not found on remote."
+          else
+            echo "::error::Failed to check remote tag '$TAG_NAME' (exit code: $status)"
+            exit "$status"
+          fi
         fi
 
         echo "Falling back to HEAD~1..."
@@ -255,6 +267,7 @@ runs:
       uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96
       with:
         files_from_source_file: .git/lokalise-action/paths.txt
+        files_ignore_from_source_file: .git/lokalise-action/exclude_paths.txt
         separator: ','
         base_sha: ${{ inputs.use_tag_tracking == 'true' && steps.get-last-sync-sha.outputs.base_sha || '' }}
         sha: ${{ inputs.use_tag_tracking == 'true' && github.sha || '' }}
@@ -268,12 +281,19 @@ runs:
         TAG_NAME="lokalise-upload-complete"
         echo "Checking if this is the first action run... (tag: $TAG_NAME)"
 
-        if git ls-remote --exit-code --refs --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+        if git ls-remote --exit-code --refs --tags origin "refs/tags/$TAG_NAME" >/dev/null; then
           echo "This is not the first action run."
           echo "first_run=false" >> "$GITHUB_OUTPUT"
         else
-          echo "This is the first action run."
-          echo "first_run=true" >> "$GITHUB_OUTPUT"
+          status=$?
+
+          if [ "$status" -eq 2 ]; then
+            echo "This is the first action run."
+            echo "first_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Failed to check remote tag '$TAG_NAME' (exit code: $status)"
+            exit "$status"
+          fi
         fi
 
     - name: Find all translation files
@@ -300,6 +320,7 @@ runs:
         FILE_EXT: "${{ inputs.file_ext }}"
         FLAT_NAMING: "${{ inputs.flat_naming }}"
         NAME_PATTERN: "${{ inputs.name_pattern }}"
+        EXCLUDE_PATTERNS: "${{ inputs.exclude_patterns }}"
         PLATFORM: "${{ steps.detect-platform.outputs.platform }}"
       run: |
         set -euo pipefail
@@ -436,11 +457,19 @@ runs:
             echo "Created global tag '$GLOBAL_TAG'."
           else
             echo "Push of '$GLOBAL_TAG' failed. Checking remote (race?)"
-            if git ls-remote --exit-code --refs --tags origin "refs/tags/$GLOBAL_TAG" >/dev/null 2>&1; then
+
+            if git ls-remote --exit-code --refs --tags origin "refs/tags/$GLOBAL_TAG" >/dev/null; then
               echo "Global tag already exists; proceeding."
             else
-              echo "Failed to create global tag '$GLOBAL_TAG' and it doesn't exist remotely."
-              exit 1
+              status=$?
+
+              if [ "$status" -eq 2 ]; then
+                echo "::error::Failed to push global tag '$GLOBAL_TAG': tag not found on remote."
+                exit 1
+              else
+                echo "::error::Failed to check remote tag '$GLOBAL_TAG' (exit code: $status)"
+                exit "$status"
+              fi
             fi
           fi
         fi
