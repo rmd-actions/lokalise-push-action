@@ -34,9 +34,14 @@ func (c *fileCollector) sorted() []string {
 }
 
 // collectFilesByPattern applies NAME_PATTERN relative to the given root.
-// The pattern is evaluated against os.DirFS("."), so it must be repo-relative
-// and must not start with "./".
-func collectFilesByPattern(root, namePattern string, add func(string)) error {
+//
+// The pattern is evaluated against os.DirFS(root). Leading "./" and
+// platform-specific separators are normalized before matching.
+func collectFilesByPattern(
+	root string,
+	namePattern string,
+	add func(string),
+) error {
 	pattern := filepath.ToSlash(namePattern)
 	pattern = strings.TrimPrefix(pattern, "./")
 
@@ -51,7 +56,12 @@ func collectFilesByPattern(root, namePattern string, add func(string)) error {
 		doublestar.WithFailOnIOErrors(),
 	)
 	if err != nil {
-		return fmt.Errorf("apply name pattern %q in %q: %w", pattern, root, err)
+		return fmt.Errorf(
+			"apply name pattern %q in %q: %w",
+			pattern,
+			root,
+			err,
+		)
 	}
 
 	return nil
@@ -76,19 +86,11 @@ func collectFlatFiles(root, baseLang string, fileExts []string, add func(string)
 			continue
 		}
 
-		name := entry.Name()
-		ext := filepath.Ext(name)
-		if ext == "" {
-			continue
-		}
-
-		base := strings.TrimSuffix(name, ext)
-		if base != baseLang {
-			continue
-		}
-
-		if hasMatchingExtension(name, fileExts) {
-			add(filepath.Join(root, name))
+		for _, ext := range fileExts {
+			if entry.Name() == baseLang+"."+ext {
+				add(filepath.Join(root, entry.Name()))
+				break
+			}
 		}
 	}
 
@@ -129,16 +131,13 @@ func collectNestedFiles(root, baseLang string, fileExts []string, add func(strin
 	})
 }
 
-// hasMatchingExtension reports whether the file name ends with one of the allowed extensions.
-// Comparison is case-insensitive.
+// hasMatchingExtension reports whether the file name ends with one of the
+// allowed extensions. Matching is case-sensitive and supports compound extensions.
 func hasMatchingExtension(name string, fileExts []string) bool {
-	fileExt := filepath.Ext(name)
-
 	for _, ext := range fileExts {
-		if strings.EqualFold(fileExt, "."+ext) {
+		if strings.HasSuffix(name, "."+ext) {
 			return true
 		}
 	}
-
 	return false
 }
